@@ -89,10 +89,15 @@ static struct clkctl_acpu_speed *backup_s;
 
 static struct pll pll2_tbl[] = {
 	{  42, 0, 1, 0 }, /*  806 MHz */
-	{  53, 1, 3, 0 }, /* 1024 MHz */
-	{ 125, 0, 1, 1 }, /* 1200 MHz */
-	{  73, 0, 1, 0 }, /* 1401 MHz */
-	{  78, 0, 1, 0 }, /* 1500 MHz */
+	{  53, 1, 3, 0 }, /* 1017 MHz */
+	{  58, 0, 1, 1 }, /* 1113 MHz */
+	{  63, 0, 1, 0 }, /* 1209 MHz */
+	{  68, 1, 3, 0 }, /* 1305 MHz */
+	{  73, 1, 3, 0 }, /* 1401 MHz */
+	{  78, 1, 3, 0 }, /* 1497 MHz */
+	{  83, 1, 3, 0 }, /* 1612 MHz */
+	{  88, 1, 3, 0 }, /* 1708 MHz */
+
 };
 
 /* Use negative numbers for sources that can't be enabled/disabled */
@@ -128,11 +133,15 @@ static struct clkctl_acpu_speed acpu_freq_tbl[] = {
 	/*
 	 * AXI has MSMC1 implications. See above.
 	 */
-	{ 1, 806400,  PLL_2, 3, 0, UINT_MAX, 1100, VDD_RAW(1100), &pll2_tbl[0]},
-	{ 1, 1024000, PLL_2, 3, 0, UINT_MAX, 1200, VDD_RAW(1200), &pll2_tbl[1]},
-	{ 1, 1200000, PLL_2, 3, 0, UINT_MAX, 1200, VDD_RAW(1200), &pll2_tbl[2]},
-	{ 1, 1401600, PLL_2, 3, 0, UINT_MAX, 1250, VDD_RAW(1250), &pll2_tbl[3]},
-	{ 1, 1497600, PLL_2, 3, 0, UINT_MAX, 1250, VDD_RAW(1250), &pll2_tbl[4]},
+	{ 1, 806400,  PLL_2,   3, 0,  192000000, 1100, VDD_RAW(1100), &pll2_tbl[0]},
+	{ 1, 1017600, PLL_2,   3, 0,  192000000, 1200, VDD_RAW(1200), &pll2_tbl[1]},
+	{ 1, 1113600, PLL_2,   3, 0,  192000000, 1225, VDD_RAW(1225), &pll2_tbl[2]},
+	{ 1, 1209600, PLL_2,   3, 0,  192000000, 1225, VDD_RAW(1225), &pll2_tbl[3]},
+	{ 1, 1305600, PLL_2,   3, 0,  192000000, 1250, VDD_RAW(1250), &pll2_tbl[4]},
+	{ 1, 1401600, PLL_2,   3, 0,  192000000, 1275, VDD_RAW(1275), &pll2_tbl[5]},
+	{ 1, 1497600, PLL_2,   3, 0,  192000000, 1300, VDD_RAW(1300), &pll2_tbl[6]},
+	{ 1, 1612800, PLL_2,   3, 0,  192000000, 1325, VDD_RAW(1325), &pll2_tbl[7]},
+	{ 1, 1708800, PLL_2,   3, 0,  192000000, 1350, VDD_RAW(1350), &pll2_tbl[8]},
 	{ 0 }
 };
 
@@ -157,6 +166,11 @@ static int acpuclk_set_acpu_vdd(struct clkctl_acpu_speed *s)
 				__func__, s->vdd_mv, ret);
 	else /* Wait for voltage to stabilize. */
 		udelay(62);
+
+#ifdef CONFIG_ACPUCLOCK_OVERCLOCKING
+  if (!ret)
+    return 0;
+#endif
 
 	return ret;
 }
@@ -236,7 +250,7 @@ static int acpuclk_7x30_set_rate(int cpu, unsigned long rate,
 		if (tgt_s->vdd_mv > strt_s->vdd_mv) {
 			rc = acpuclk_set_acpu_vdd(tgt_s);
 			if (rc < 0) {
-				pr_err("[K] ACPU VDD increase to %d mV failed "
+				pr_err("ACPU VDD increase to %d mV failed "
 					"(%d)\n", tgt_s->vdd_mv, rc);
 				goto out;
 			}
@@ -252,7 +266,7 @@ static int acpuclk_7x30_set_rate(int cpu, unsigned long rate,
 	if (tgt_s->axi_clk_hz > strt_s->axi_clk_hz) {
 		rc = clk_set_rate(drv_state.ebi1_clk, tgt_s->axi_clk_hz);
 		if (rc < 0) {
-			pr_err("[K] Setting AXI min rate failed (%d)\n", rc);
+			pr_err("Setting AXI min rate failed (%d)\n", rc);
 			goto out;
 		}
 	}
@@ -297,7 +311,7 @@ static int acpuclk_7x30_set_rate(int cpu, unsigned long rate,
 	if (tgt_s->axi_clk_hz < strt_s->axi_clk_hz) {
 		res = clk_set_rate(drv_state.ebi1_clk, tgt_s->axi_clk_hz);
 		if (res < 0)
-			pr_warning("[K] Setting AXI min rate failed (%d)\n", res);
+			pr_warning("Setting AXI min rate failed (%d)\n", res);
 	}
 
 	/* Nothing else to do for power collapse. */
@@ -308,7 +322,7 @@ static int acpuclk_7x30_set_rate(int cpu, unsigned long rate,
 	if (tgt_s->vdd_mv < strt_s->vdd_mv) {
 		res = acpuclk_set_acpu_vdd(tgt_s);
 		if (res)
-			pr_warning("[K] ACPU VDD decrease to %d mV failed (%d)\n",
+			pr_warning("ACPU VDD decrease to %d mV failed (%d)\n",
 					tgt_s->vdd_mv, res);
 	}
 
@@ -361,7 +375,7 @@ static void __init acpuclk_hw_init(void)
 				break;
 		}
 		if (s->acpu_clk_khz == 0) {
-			pr_err("[K] Error - ACPU clock reports invalid speed\n");
+			pr_err("Error - ACPU clock reports invalid speed\n");
 			return;
 		}
 		break;
@@ -383,7 +397,7 @@ static void __init acpuclk_hw_init(void)
 		}
 		/* else fall through */
 	default:
-		pr_err("[K] Error - ACPU clock reports invalid source\n");
+		pr_err("Error - ACPU clock reports invalid source\n");
 		return;
 	}
 
@@ -404,7 +418,7 @@ static void __init acpuclk_hw_init(void)
 
 	res = clk_set_rate(drv_state.ebi1_clk, s->axi_clk_hz);
 	if (res < 0)
-		pr_warning("[K] Setting AXI min rate failed!\n");
+		pr_warning("Setting AXI min rate failed!\n");
 
 	pr_info("ACPU running at %d KHz\n", s->acpu_clk_khz);
 
@@ -453,11 +467,14 @@ static inline void setup_cpufreq_table(void) { }
 void __init pll2_fixup(void)
 {
 	struct clkctl_acpu_speed *speed = acpu_freq_tbl;
+#ifndef CONFIG_ACPUCLOCK_OVERCLOCKING
 	u8 pll2_l = readl_relaxed(PLL2_L_VAL_ADDR) & 0xFF;
+#endif
 
 	for ( ; speed->acpu_clk_khz; speed++) {
 		if (speed->src != PLL_2)
 			backup_s = speed;
+#ifndef CONFIG_ACPUCLOCK_OVERCLOCKING
 		/* Base on PLL2_L_VAL_ADDR to switch acpu speed */
 		else {
 			if (speed->pll_rate && speed->pll_rate->l != pll2_l)
@@ -468,10 +485,13 @@ void __init pll2_fixup(void)
 			speed->acpu_clk_khz = 0;
 			return;
 		}
+#endif
 	}
 
+#ifndef CONFIG_ACPUCLOCK_OVERCLOCKING
 	pr_err("Unknown PLL2 lval %d\n", pll2_l);
 	BUG();
+#endif
 }
 
 #define RPM_BYPASS_MASK	(1 << 3)

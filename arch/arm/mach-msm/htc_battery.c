@@ -49,6 +49,11 @@
 #include <linux/ds2746_battery.h>
 #endif
 
+#ifdef CONFIG_FORCE_FAST_CHARGE
+#include <linux/fastchg.h>
+#endif
+
+
 #include <linux/android_alarm.h>
 
 static struct wake_lock vbus_wake_lock;
@@ -446,9 +451,19 @@ int battery_charging_ctrl(enum batt_ctl_t ctl)
 		result = gpio_direction_output(htc_batt_info.gpio_mchg_en_n, 1);
 		break;
 	case ENABLE_SLOW_CHG:
-		BATT_LOG("charger ON (SLOW)");
-		result = gpio_direction_output(htc_batt_info.gpio_iset, 0);
-		result = gpio_direction_output(htc_batt_info.gpio_mchg_en_n, 0);
+#ifdef CONFIG_FORCE_FAST_CHARGE
+   if (force_fast_charge == 1) {
+      BATT_LOG("charger ON (FORCE_FAST_CHARGE)");
+      result = gpio_direction_output(htc_batt_info.gpio_iset, 1);
+      result = gpio_direction_output(htc_batt_info.gpio_mchg_en_n, 0);
+    } else {
+#endif
+      BATT_LOG("charger ON (SLOW)");
+      result = gpio_direction_output(htc_batt_info.gpio_iset, 0);
+      result = gpio_direction_output(htc_batt_info.gpio_mchg_en_n, 0);
+#ifdef CONFIG_FORCE_FAST_CHARGE
+    }
+#endif
 		if (htc_batt_info.gpio_adp_9v > 0)
 			result = gpio_direction_output(htc_batt_info.gpio_adp_9v, 0);
 		break;
